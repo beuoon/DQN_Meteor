@@ -37,7 +37,7 @@ var Player = function () {
 	// 이동
 	this.speed = 250;
 	
-	this.moveDir = 0, this.lastMoveDir = 0;
+	this.lastMoveDir = 0;
 	this.moveLimit = {left: this.size.width/2, right: 400 - this.size.width/2};
 	this.moveStatus = null;
 	
@@ -79,7 +79,7 @@ Player.prototype = {
 		var speed = this.speed * frameInterval;
 		
 		// 이동 방향 계산
-		var moveDir = 0;
+		let moveDir = 0;
 		if (keyStatus.left && keyStatus.right) {
 			if (moveStatus == 'left')
 				moveDir = -1;

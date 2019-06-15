@@ -74,11 +74,7 @@
 		<link rel="stylesheet" type="text/css" href="main.css">
 	</head>
 	<body>
-		<canvas id="mainCanvas" width="400px" height="400px"></canvas><br>
-        <br>
-		<canvas id="scaleCanvas" width="50px" height="50px"></canvas><br>
-        <br>
-        결과1 <br>
+        결과1 : 
         <%
             for (int i = 0; i < predictData1.size(); i++) {
                 double[][] predict = predictData1.get(i);
@@ -90,7 +86,7 @@
                 } 
             }
         %>
-        결과2 <br>
+        결과2 : 
         <%
             for (int i = 0; i < predictData2.size(); i++) {
                 double[][] predict = predictData2.get(i);
@@ -103,7 +99,11 @@
             }
         %>
 		
+		<canvas id="mainCanvas" width="400px" height="400px"></canvas><br>
+        <br>
+		
         <script src="DQN/ErrorLayer_MSE.js"></script>
+        <script src="DQN/Layer_LeackyReLU.js"></script>
         <script src="DQN/Layer_ReLU.js"></script>
         <script src="DQN/Layer_Linear.js"></script>
         <script src="DQN/Layer_Flatten.js"></script>

@@ -39,7 +39,7 @@ function contextNegative(context, x, y, width, height) { // 네거티브 필터
 	
 	context.putImageData(imageData, x, y);
 }
-function processImageData(context, width, height) {
+function processImageData(context, width, height) { // down size, gray scale
     let CW = context.canvas.width, CH = context.canvas.height;
     let widthRate = CW/width, heightRate = CH/height;
     
@@ -65,7 +65,7 @@ function processImageData(context, width, height) {
     
     return result;
 }
-function processData(data) {
+function encodeData(data) { // 흑을 1로, 백을 0으로
     let result = [];
     let width = data[0].length, height = data.length;
     
@@ -77,20 +77,41 @@ function processData(data) {
     
     return result;
 }
-function drawImageData(context, grayData) { // draw gray data that were processed.
-    let width = grayData[0].length, height = grayData.length;
-    context.canvas.width = width, context.canvas.height = height;
+function decodeData(data) { // 흑을 0으로, 백을 255로
+    let result = [];
+    let width = data[0].length, height = data.length;
     
-	let imageData = context.getImageData(0, 0, width, height),
+    for (let y = 0; y < height; y++) {
+        result[y] = [];
+        for (let x = 0; x < width; x++)
+            result[y][x] = (1 - data[y][x]) * 255;
+    }
+    
+    return result;
+}
+
+function drawImageData_Upsize(context, grayData) { // draw gray data were processed.
+    let dataSize = {width: grayData[0].length, height: grayData.length};
+    let canvasSize = {width: context.canvas.width, height: context.canvas.height};
+	let upsizeRate = {x: canvasSize.width/dataSize.width, y: canvasSize.height/dataSize.height};
+    
+    let imageData = context.getImageData(0, 0, canvasSize.width, canvasSize.height),
 		data = imageData.data;
 	
-	for (let y = 0; y < height; y++) {
-		for (let x = 0; x < width; x++) {
-			let index = (y * width + x) * 4;
+	for (let y = 0; y < dataSize.height; y++) {
+		for (let x = 0; x < dataSize.width; x++) {
 			
-			for (let k = 0; k < 3; k++)
-				data[index + k] = grayData[y][x];
-			data[index + 3] = 255;
+			for (let p = 0; p < upsizeRate.y; p++) {
+				for (let q = 0; q < upsizeRate.x; q++) {
+					let index = ((y*upsizeRate.y + p) * canvasSize.width + x*upsizeRate.x + q) * 4;
+					
+					for (let k = 0; k < 3; k++)
+						data[index + k] = grayData[y][x];
+					
+					data[index + 3] = 255;
+				}
+			}
+			
 		}
 	}
 	

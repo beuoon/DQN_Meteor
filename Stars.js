@@ -13,6 +13,21 @@ var Stars = function () {
 	
 	this.bCollision = false;
 }
+var Stars = function (posX, angle) {
+	this.size = {width: 5, height: 5};
+	this.pos = {x: posX, y: -this.size.height};
+	this.angle = 0;
+	
+	this.dirAngle = angle/180 * Math.PI; // -45 ~ 45
+	this.dir = {x: Math.sin(this.dirAngle), y: Math.cos(this.dirAngle)};
+	this.speed = 200; // speed per second
+	
+	this.traceObjectNum = 1; // 잔흔 개수
+	this.objetcs = [];
+	
+	this.bCollision = false;
+}
+
 Stars.prototype = {
 	update: function (frameInterval) {
 		var pos = this.pos, size = this.size;
@@ -28,8 +43,8 @@ Stars.prototype = {
 		}
 		
 		// TODO: 일정 시간 간격으로 생성되게 바꿔야 함
-		for (let i = 0; i < this.traceObjectNum; i++)
-			this.objetcs.push(new TraceObject(this.pos, this.size, this.dirAngle, this.speed));
+		// for (let i = 0; i < this.traceObjectNum; i++)
+			// this.objetcs.push(new TraceObject(this.pos, this.size, this.dirAngle, this.speed));
 		
 		if (pos.y + size.height/2 >= 400)
 			this.destroy();
@@ -53,8 +68,8 @@ Stars.prototype = {
 	destroy: function() {
 		this.bCollision = true;
 		
-		for (let i = 0; i < 20; i++)
-			this.objetcs.push(new ExplosionObject(this.pos, this.size, this.dirAngle, this.speed));
+		// for (let i = 0; i < 20; i++)
+		// 	this.objetcs.push(new ExplosionObject(this.pos, this.size, this.dirAngle, this.speed));
 	},
 	checkCollision: function () {
 		return this.bCollision;

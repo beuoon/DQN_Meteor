@@ -1,6 +1,6 @@
 #mainCanvas {
 	border: solid 1px blue;
 }
-#scaleCanvas {
+canvas {
     border: solid 1px red;
 }

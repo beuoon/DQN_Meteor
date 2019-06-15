@@ -2,20 +2,20 @@ let Layer_Flatten = function () {
     this.inputInfo;
 }
 Layer_Flatten.prototype = {
-    forward: function (dataList) {
-        this.inputInfo = {width: dataList[0][0].length, height: dataList[0].length, depth: dataList.length};
+    forward: function (data) {
+        this.inputInfo = {width: data[0][0].length, height: data[0].length, depth: data.length};
         let output = [];
         
         for (let z = 0; z < this.inputInfo.depth; z++) {
             for (let y = 0; y < this.inputInfo.height; y++) {
                 for (let x = 0; x < this.inputInfo.width; x++)
-                    output.push(dataList[z][y][x]);
+                    output.push(data[z][y][x]);
             }
         }
         
-        return [output];
+        return output;
     },
-    backward: function (deltaList) {
+    backward: function (delta) {
         let output = [];
         let index = 0;
 		
@@ -24,12 +24,11 @@ Layer_Flatten.prototype = {
             for (let y = 0; y < this.inputInfo.height; y++) {
                 output[z][y] = [];
                 for (let x = 0; x < this.inputInfo.width; x++) {
-                    output[z][y][x] = deltaList[0][index++];
+                    output[z][y][x] = delta[index++];
 				}
             }
         }
-        deltaList = output;
         
-        return deltaList;
+        return output;
     }
 }

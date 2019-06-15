@@ -11,7 +11,10 @@ Network.prototype = {
     },
     
     predict: function(data) {
-        return this.forward(data);
+		let dataList = [data];
+        for (let i = 0; i < this.layers.length; i++)
+            dataList[i+1] = this.layers[i].forward(dataList[i]);
+        return dataList;
     },
     train: function(data, label) {
         data = this.forward(data);

@@ -7,12 +7,14 @@ let Layer_Convolution = function (filterInfo, stride=1, paddingSize=0) {
     this.weightList = [];
     this.biasList = [];
     
+	this.IW, this.IH; // input width, input height
+	this.PW, this.PH; // padding data width, padding data height
+	this.CW, this.CH; // channel width, channel height
     this.uDataList = null;
     this.zDataList = null;
     
-        
     let weightLimit = Math.sqrt(6.0/(filterInfo.width * filterInfo.height * filterInfo.depth));
-        
+	
     this.weightList = [];
     this.biasList = [];
     for (let c = 0; c < filterInfo.num; c++) {
@@ -26,53 +28,76 @@ let Layer_Convolution = function (filterInfo, stride=1, paddingSize=0) {
                     weight[z][y][x] = (Math.random() * 2 - 1) * weightLimit;
             }
         }
-        
-        let bias = (Math.random() * 2 - 1) * weightLimit;
-            
+        // let bias = (Math.random() * 2 - 1) * weightLimit;
+        let bias = Math.random() * weightLimit;
+		
         this.weightList.push(weight);
         this.biasList.push(bias);
     }
 }
 
 Layer_Convolution.prototype = {
-    forward: function (dataList) {
-        let IW = dataList[0][0].length, // input width
-            IH = dataList[0].length; // input height
-
-        let CW = (IW + 2*this.paddingSize - this.filterInfo.width)/this.stride + 1, // channel width
-            CH = (IH + 2*this.paddingSize - this.filterInfo.height)/this.stride + 1; // chanel height
+	calcSize: function (inputSize) {
+        this.IW = inputSize.width;
+		this.IH = inputSize.height;
+		
+        this.CW = (this.IW + 2*this.paddingSize - this.filterInfo.width)/this.stride + 1; // channel width
+		this.CH = (this.IH + 2*this.paddingSize - this.filterInfo.height)/this.stride + 1; // chanel height
+		
+		this.PW = this.IW;
+		this.PH = this.IH;
         
         // Zero Padding
         if (this.paddingSize > 0) {
             let paddingDataList = [];
-            let DW = IW + 2*this.paddingSize, // padding data width
-                DH = IH + 2*this.paddingSize; // padding data height
+            this.PW = this.IW + 2*this.paddingSize; // padding data width
+			this.PH = this.IH + 2*this.paddingSize; // padding data height
+		}
+		
+		return {width: this.CW, height: this.CH, depth: this.filterInfo.num};
+	},
+	
+    forward: function (dataList) {
+        this.IW = dataList[0][0].length;
+		this.IH = dataList[0].length;
+
+        this.CW = (this.IW + 2*this.paddingSize - this.filterInfo.width)/this.stride + 1; // channel width
+		this.CH = (this.IH + 2*this.paddingSize - this.filterInfo.height)/this.stride + 1; // chanel height
+		
+		this.PW = this.IW;
+		this.PH = this.IH;
+        
+        // Zero Padding
+        if (this.paddingSize > 0) {
+            let paddingDataList = [];
+            this.PW = this.IW + 2*this.paddingSize; // padding data width
+			this.PH = this.IH + 2*this.paddingSize; // padding data height
             
             for (let c = 0; c < dataList.length; c++) {
                 let data = dataList[c];
                 let paddingData = [];
-                for (let y = 0; y < DH; y++)
+                for (let y = 0; y < this.PH; y++)
                     paddingData[y] = [];
 
                 // TOP & BOTTOM
                 for (let y = 0; y < this.paddingSize; y++) {
-                    for (let x = 0; x < DW; x++) {
+                    for (let x = 0; x < this.PW; x++) {
                         paddingData[y][x] = 0;
-                        paddingData[DH-y-1][x] = 0;
+                        paddingData[this.PH-y-1][x] = 0;
                     }
                 } // end for paddingSize
                 
                 // LEFT & RIGHT
                 for (let x = 0; x < this.paddingSize; x++) {
-                    for (let y = 0; y < DH; y++) {
+                    for (let y = 0; y < this.PH; y++) {
                         paddingData[y][x] = 0;
-                        paddingData[y][DW-x-1] = 0;
+                        paddingData[y][this.PW-x-1] = 0;
                     }
                 } // end for paddingSize
                 
                 // Data
-                for (let y = 0, py = this.paddingSize; y < IH; y++, py++) {
-                    for (let x = 0, px = this.paddingSize; x < IW; x++, px++)
+                for (let y = 0, py = this.paddingSize; y < this.IH; y++, py++) {
+                    for (let x = 0, px = this.paddingSize; x < this.IW; x++, px++)
                         paddingData[py][px] = data[y][x];
                 } // end for paddingSize
                 
@@ -91,11 +116,11 @@ Layer_Convolution.prototype = {
             let bias = this.biasList[c];
             let channel = [];
             
-            for (let p = 0; p < CH; p++) {
+            for (let p = 0; p < this.CH; p++) {
                 indexY = p * this.stride;
                 
                 channel[p] = [];
-                for (let q = 0; q < CW; q++) {
+                for (let q = 0; q < this.CW; q++) {
                     indexX = q * this.stride;
                     
                     channel[p][q] = 0;
@@ -117,9 +142,9 @@ Layer_Convolution.prototype = {
         let outputList = [];
         for (let c = 0; c < this.filterInfo.num; c++) {
             outputList[c] = [];
-            for (let y = 0; y < CH; y++) {
+            for (let y = 0; y < this.CH; y++) {
                 outputList[c][y] = [];
-                for (let x = 0; x < CW; x++)
+                for (let x = 0; x < this.CW; x++)
                     outputList[c][y][x] = this.ReLU(this.zDataList[c][y][x]);
             }
         }
@@ -127,13 +152,137 @@ Layer_Convolution.prototype = {
         return outputList;
     },
     backward: function (deltaList) {
-        return deltaList;
+		let zDeltaList = [];
+		
+		// Activation diff
+        for (let c = 0; c < this.filterInfo.num; c++) {
+            zDeltaList[c] = [];
+            for (let y = 0; y < this.CH; y++) {
+                zDeltaList[c][y] = [];
+                for (let x = 0; x < this.CW; x++)
+                    zDeltaList[c][y][x] = this.ReLU_diff(this.zDataList[c][y][x]) * deltaList[c][y][x];
+            }
+        }
+		
+		//＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊//
+		// create delta value
+		let uDeltaList = [];
+		for (let z = 0; z < this.filterInfo.depth; z++) {
+			uDeltaList[z] = [];
+			for (let y = 0; y < this.PH; y++) {
+				uDeltaList[z][y] = [];
+				for (let x = 0; x < this.PW; x++)
+					uDeltaList[z][y][x] = 0;
+			}
+		}
+		
+		// Convolution diff
+        for (let c = 0; c < this.filterInfo.num; c++) {
+            let weight = this.weightList[c];
+            let bias = this.biasList[c];
+            
+			let indexY, indexX;
+            for (let p = 0; p < this.CH; p++) {
+                indexY = p * this.stride;
+                
+                for (let q = 0; q < this.CW; q++) {
+                    indexX = q * this.stride;
+                    
+                    for (let z = 0; z < this.filterInfo.depth; z++) {
+                        for (let y = 0; y < this.filterInfo.height; y++) {
+                            for (let x = 0; x < this.filterInfo.width; x++)
+                                uDeltaList[z][indexY + y][indexX + x] += zDeltaList[c][p][q] * weight[z][y][x];
+                        }
+                    } // end for filter depth
+                    
+                } // end for channel width
+            } // end for channel height
+        } // end for filter num
+		
+		// extract data range
+		if (this.paddingSize > 0) {
+            let inDeltaList = [];
+            
+            for (let z = 0; z < this.filterInfo.depth; z++) {
+				inDeltaList[z] = [];
+				for (let y = 0, py = this.paddingSize; y < this.IH; y++, py++) {
+					inDeltaList[z][y] = [];
+					for (let x = 0, px = this.paddingSize; x < this.IW; x++, px++)
+						inDeltaList[z][y][x] = uDeltaList[z][py][px];
+				}
+			}
+			
+			uDeltaList = inDeltaList;
+        } // end if padding
+		
+		//＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊//
+		// create weight delta value
+		let weightDeltaList = [];
+		let biasDeltaList = [];
+		for (let c = 0; c < this.filterInfo.num; c++) {
+			let weightDelta = [];
+			
+			for (let z = 0; z < this.filterInfo.depth; z++) {
+				weightDelta[z] = [];
+				for (let y = 0; y < this.filterInfo.height; y++) {
+					weightDelta[z][y] = [];
+					for (let x = 0; x < this.filterInfo.width; x++)
+						weightDelta[z][y][x] = 0;
+				}
+			}
+			
+			weightDeltaList.push(weightDelta);
+			biasDeltaList[c] = 0;
+		}
+		
+		// calc weigt delta
+        for (let c = 0; c < this.filterInfo.num; c++) {
+            let indexX, indexY;
+            for (let p = 0; p < this.CH; p++) {
+                indexY = p * this.stride;
+                
+                for (let q = 0; q < this.CW; q++) {
+                    indexX = q * this.stride;
+                    
+                    for (let z = 0; z < this.filterInfo.depth; z++) {
+                        for (let y = 0; y < this.filterInfo.height; y++) {
+                            for (let x = 0; x < this.filterInfo.width; x++)
+								weightDeltaList[c][z][y][x] += zDeltaList[c][y][x] * this.uDataList[z][indexY + y][indexX + x];
+                        }
+                    } // end for filter depth
+                    
+                } // end for channel width
+            } // end for channel height
+			
+        } // end for filter num
+		
+		// calc bias delta
+		
+		for (let c = 0; c < this.filterInfo.num; c++) {
+			for (let y = 0; y < this.filterInfo.height; y++) {
+				for (let x = 0; x < this.filterInfo.width; x++)
+					biasDeltaList[c] += zDeltaList[c][y][x];
+			}
+        } // end for filter num
+		
+		// weight update
+		for (let c = 0; c < this.filterInfo.num; c++) {
+			for (let z = 0; z < this.filterInfo.depth; z++) {
+				for (let y = 0; y < this.filterInfo.height; y++) {
+					for (let x = 0; x < this.filterInfo.width; x++)
+						this.weightList[c][z][y][x] += -this.ETA * weightDeltaList[c][z][y][x];
+				}
+			}
+			this.biasList[c] += -this.ETA * biasDeltaList[c];
+		}
+		
+        return uDeltaList;
     },
     
     ReLU: function (x) {
-        return Math.max(x, 0);
+        return Math.max(x, 0.0);
     },
     ReLU_diff: function (x) {
-        return (x > 0) ? 1 : 0;
+        return (x > 0) ? 1 : 0.0;
     }
 }
