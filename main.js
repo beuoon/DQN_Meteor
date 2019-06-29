@@ -1,26 +1,24 @@
 
 var Scene = function (canvasId) {
+	this.fpsVal = 60;
+	this.gameSize = {width: 50, height: 50};
+	this.gamePause = false;
+	this.targetX = this.gameSize.width/2;
+	
 	this.canvas = document.getElementById(canvasId);
+	this.canvas.width = this.gameSize.width;
+	this.canvas.height = this.gameSize.height;
 	this.context = this.canvas.getContext('2d');
 	
-	this.fpsVal = 60;
-	
-	// TEST Game
-	// Score, X, Angle
-	this.starPosList = [[0, 1, 45], [0, 3, 45], [10, 300, -30];
-	
-	
 	// DQN Sample
-	this.samplePos = {x: 500, y: 500}; // Sample 이미지 시작 위치
+	this.bSampleCanvas = true;
     this.sampleCanvasList = [];
 	this.sampleSizeList = [];
+	this.SAMPLE_SCALE_RATE = 5;
 	
 	// DQN
-	this.CROPPING_SIZE = {width: 100, height: 100, depth: 4}; // 학습에 사용될 이미지 크기 및 개수
-	this.REWARD_GAMMA = 0; // 0.9; // 미래 보상값에 대한 gamma 값
-	this.TRAIN_EPOCH = 5; // 한번 train 할 때 시행할 epoch 값
-	this.MINIMUM_EPSILON = 0.01; // 임의 행동의 최소 epsilon 값
-	this.EPSILON_BETA = 0.998; // 임의 행동 epsilon 값의 감소율
+	this.TRAIN_EPOCH = 50; // 한번 train 할 때 시행할 epoch 값
+	this.SKIPPING_FRAME = 4; // 수집하는 프레임 간격
 	
 	// Init
 	this.init();
@@ -32,25 +30,28 @@ DQN을 접목할 수 있는 모델:
 → 같은 state에서 동일한 action을 할 때 무조건 같은 reward와 next state가 나와야 한다.
 → reward가 다른 state는 구분 가능해야한다.
 */
+/*
+DQN 클래스 모델:
+state: {image, image, image, ...}
+data: {state, action, reward, nextState}
+
+image → DQN → action
+         ↑
+	   reward
+
+*/
 Scene.prototype = {
 	init: function () {
-        // DQN
-        this.dataList = []; // 상태 저장 리스트
-		this.replayDataList = []; // 총 플레이 데이터 리스트
-		this.prevData = null; // 이전 상태값
-		this.reward = 0; // 보상값
-		this.prevReward = 0; // 이전 보상값
-		this.prevActionNumber = -1; // 이전 행동
 		this.predictList = null; // DQN의 각 Layer에서 forward된 값들
 		
 		// 오브젝트
-		this.player = new Player();
+		this.player = new Player(this.gameSize);
 		
 		this.stars = [];
-		this.starNum = 10;
+		this.starNum = 1; // 원래는 10
 		
 		for (let i = 0; i < this.starNum; i++)
-			this.stars.push(new Stars());
+			this.stars.push(this.createStar());
 		this.particleObjects = [];
 		
 		// 화면 위치 및 진동
@@ -74,27 +75,27 @@ Scene.prototype = {
 	},
 	
 	initNetwork: function () {
-		let layer, resultSize;
+		let layer, sampleSize;
 		
-		this.network = new Network(); // [망구조] http://incredible.ai/artificial-intelligence/2017/06/03/Deep-Reinforcement-Learning/
+		this.network = new DQN(); // [망구조] http://incredible.ai/artificial-intelligence/2017/06/03/Deep-Reinforcement-Learning/
 		
-		resultSize = this.CROPPING_SIZE;
-		this.sampleSizeList.push(resultSize);
+		sampleSize = this.CROPPING_SIZE;
+		this.sampleSizeList.push(sampleSize);
 		
-		layer = new Layer_Convolution({width: 3, height: 3, depth: 4, num: 4}, 3, 1);
-		resultSize = layer.calcSize(resultSize);
-		this.sampleSizeList.push(resultSize);
+		layer = new Layer_Convolution({width: 4, height: 4, depth: 4, num: 6}, 4, 1);
+		sampleSize = layer.calcSize(sampleSize);
+		this.sampleSizeList.push(sampleSize);
 		this.network.addLayer(layer);
 		
-		layer = new Layer_Convolution({width: 2, height: 2, depth: 4, num: 6}, 2);
-		resultSize = layer.calcSize(resultSize);
-		this.sampleSizeList.push(resultSize);
+		layer = new Layer_Convolution({width: 3, height: 3, depth: 6, num: 8}, 3, 1);
+		sampleSize = layer.calcSize(sampleSize);
+		this.sampleSizeList.push(sampleSize);
 		this.network.addLayer(layer);
 		
-		resultSize = resultSize.width * resultSize.height * resultSize.depth;
+		sampleSize = sampleSize.width * sampleSize.height * sampleSize.depth;
 		
 		this.network.addLayer(new Layer_Flatten());
-		this.network.addLayer(new Layer_Linear(resultSize, 250));
+		this.network.addLayer(new Layer_Linear(sampleSize, 250));
 		
 		this.network.addLayer(new Layer_LeackyReLU());
 		this.network.addLayer(new Layer_Linear(250, 100));
@@ -104,33 +105,31 @@ Scene.prototype = {
 		
 		this.network.addLayer(new Layer_LeackyReLU());
 		this.network.addLayer(new Layer_Linear(50, 3));
+		this.network.setActionNum(3);
 		
-		this.network.setErrorLayer(new ErrorLayer_MSE());
 		
 		// 학습
-		this.epochCount = 0;
-		this.actionEpsilon = 1;
-		
-		this.bRandomAction = true; // 랜덤 액션
 		this.bNetworkAction = true; // 네트워크 액션
 		
 		// create sample canvas
-		let padding = "   ";
-		for (let i = 0; i < this.sampleSizeList.length; i++) {
-			let sampleCanvas = [];
-			let size = this.sampleSizeList[i];
-			
-			for (let j = 0; j < size.depth; j++) {
-				let canvas = document.createElement('canvas');
-				
-				canvas.width = size.width * 5;
-				canvas.height = size.height * 5;
-				document.body.append(canvas);
-				document.body.append(padding);
-				sampleCanvas.push(canvas);
+		if (this.bSampleCanvas) {
+			let padding = "   ";
+			for (let i = 0; i < this.sampleSizeList.length; i++) {
+				let sampleCanvas = [];
+				let size = this.sampleSizeList[i];
+
+				for (let j = 0; j < size.depth; j++) {
+					let canvas = document.createElement('canvas');
+
+					canvas.width = size.width * this.SAMPLE_SCALE_RATE;
+					canvas.height = size.height * this.SAMPLE_SCALE_RATE;
+					document.body.append(canvas);
+					document.body.append(padding);
+					sampleCanvas.push(canvas);
+				}
+				document.body.append(document.createElement("br"));
+				this.sampleCanvasList.push(sampleCanvas);
 			}
-			document.body.append(document.createElement("br"));
-			this.sampleCanvasList.push(sampleCanvas);
 		}
 	},
 	
@@ -144,14 +143,16 @@ Scene.prototype = {
 		
 		//＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊//
 		// Frame Content
-		this.update(frameInterval);
-		this.draw();
-		
-		if (!this.bEndGame)
-			this.networkUpdate();
-		else {
-			this.networkLearning();
-			this.init();
+		if (!this.gamePause) {
+			this.update(frameInterval);
+			this.draw();
+
+			if (!this.bEndGame)
+				this.networkUpdate();
+			else {
+				this.networkLearning();
+				this.init();
+			}
 		}
 		
 		//＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊//
@@ -173,35 +174,43 @@ Scene.prototype = {
 	update: function (frameInterval) {        
 		this.player.update(frameInterval);
 		
-		// 점수 및 난이도 조절
 		if (this.player.checkLive()) {
+			// 점수 상승
 			this.score += 100 * frameInterval;
 			
-			if (this.score - this.prevStageScore > 750) {
-				this.starNum++;
-				for (let i = this.stars.length; i < this.starNum; i++)
-					this.stars.push(new Stars());
+			// 점수에 따른 난이도 증가
+			// if (this.score - this.prevStageScore > 750) {
+			// 	this.starNum++;
+			// 	for (let i = this.stars.length; i < this.starNum; i++)
+			// 		this.stars.push(this.createStar());
 				
-				this.prevStageScore = this.score;
-			}
+			// 	this.prevStageScore = this.score;
+			// }
 		}
 		
 		// 유성
-		var stars = this.stars;
-		for (let i = stars.length - 1; i >= 0; i--) {
-			stars[i].update(frameInterval);
-			this.player.collision(stars[i]); // 충돌 확인
+		for (let i = this.stars.length - 1; i >= 0; i--) {
+			let star = this.stars[i];
+			star.update(frameInterval);
 			
-			this.particleObjects = this.particleObjects.concat(stars[i].popObjetcs());
+			if (star.pos.x - star.size.width/2 <= 0 || star.pos.x + star.size.width/2 >= this.gameSize.width) // 벽에 부딪히면 튕김
+				star.reflect();
+			if (star.pos.y >= this.gameSize.height) // 지상에 부딪히면 파괴
+				star.destroy();
+			this.player.collision(star); // 충돌 확인
 			
-			if (stars[i].checkCollision()) {
-				this.wavePower += 5.0;
-				if (this.player.live) {
-					stars[i] = new Stars(); // 플레이어 살아있으면 유성 계속 생성
-					this.reward++;
-				}
-				else
-					stars.splice(i, 1); // 플레이어 죽으면 유성 생성 중단
+			this.particleObjects = this.particleObjects.concat(star.popObjetcs()); // 잔흔 파티클 처리
+			
+			if (star.checkCollision()) {
+				this.wavePower += 5.0; // 진동 세기 증가
+				this.targetX = this.player.pos.x; // 다음번 유성의 목적지
+				this.reward = 1;
+				this.stars.splice(i, 1);
+				
+				// if (this.player.live)
+				// 	this.stars[i] = this.createStar(); // 플레이어 살아있으면 유성 계속 생성
+				// else
+				// 	this.stars.splice(i, 1); // 플레이어 죽으면 유성 생성 중단
 			}
 		}
 		
@@ -223,7 +232,7 @@ Scene.prototype = {
 		else if (this.wavePower > 0)
 			this.wavePower = 0;
 		
-		this.pos.x = Math.sin(this.waveFrame * Math.PI * 2) * this.wavePower; // 좌우 진동
+		// this.pos.x = Math.sin(this.waveFrame * Math.PI * 2) * this.wavePower; // 좌우 진동
 		// this.pos.y = Math.cos(this.waveFrame * Math.PI * 2) * this.wavePower; // 상하 진동
 	},
 	
@@ -236,8 +245,8 @@ Scene.prototype = {
         context.restore();
 		
         context.save();
-		this.drawFPS(context);
-		this.drawScore(context);
+		// this.drawFPS(context);
+		// this.drawScore(context);
 		
 		context.translate(this.pos.x, this.pos.y);
 		
@@ -250,11 +259,14 @@ Scene.prototype = {
 		context.restore();
 		
 		// Extract Data
-		let grayData = processImageData(context, this.CROPPING_SIZE.width, this.CROPPING_SIZE.height);
-		this.dataList.push(grayData);
+		if (++this.frameCount % this.SKIPPING_FRAME == 0) {
+			let grayData = processImageData(context, this.CROPPING_SIZE.width, this.CROPPING_SIZE.height);
+			this.dataList.push(grayData);
+			this.frameCount = 0;
+		}
 		
 		// Draw Sample Image
-		if (this.predictList == null) return;
+		if (!this.bSampleCanvas || this.predictList == null) return;
 		for (let i = 0; i < this.sampleCanvasList.length; i++) {
 			for (let j = 0; j < this.sampleCanvasList[i].length; j++)
 				drawImageData_Upsize(this.sampleCanvasList[i][j].getContext('2d'), decodeData(this.predictList[i][j]));
@@ -267,47 +279,13 @@ Scene.prototype = {
 	},
 	drawScore: function (context) {
 		context.beginPath();
-		context.fillText("score : " + Math.floor(this.score), context.canvas.width - 70, 10);
+		context.fillText("score : " + Math.floor(this.score), context.canvas.width - 60, 10);
 		context.stroke();
 	},
 	
 	networkUpdate: function () {
 		if (this.bEndGame) return ;
-		if (this.dataList.length < this.CROPPING_SIZE.depth) return ;
 		
-		let data = [];
-		for (let i = 0; i < this.CROPPING_SIZE.depth; i++)
-			data[i] = encodeData(this.dataList[i]);
-		this.dataList.shift();
-		
-		// Predict
-		this.predictList = this.network.predict(data);
-		let result = this.predictList[this.predictList.length-1];
-		
-		// 최대 보상값을 갖는 action number 찾기
-		let maxIndex = 0;
-		for (let i = 1; i < result.length; i++) {
-			if (result[i] > result[maxIndex])
-				maxIndex = i;
-		}
-		
-		// 각 행동에 대한 보상값 출력 (TEST)
-		let printResult = [];
-		for (let i = 0; i < result.length; i++)
-			printResult[i] = Math.round(result[i] * 1000) / 1000;
-		console.log("[" + maxIndex + "] " + printResult);
-		
-		// Random greedy-epsilon: 확률적 임의 행동
-		let actionNumber = maxIndex;
-		if (this.bRandomAction) {
-			if (Math.random() < this.actionEpsilon) {
-				do
-					actionNumber = Math.floor(Math.random() * 3);
-				while (actionNumber >= 3);
-				if (this.actionEpsilon > this.MINIMUM_EPSILON)
-					this.actionEpsilon *= this.EPSILON_BETA;
-			}
-		}
 		
 		if (this.bNetworkAction) {
 			// 선택한 actionNumber에 따라 행동
@@ -325,36 +303,9 @@ Scene.prototype = {
 				case 1: actionNumber = 2; break;
 			}
 		}
-			
-		// input(prevData), label(prevAction, prev reward, max reward of curr Data)
-		if (this.prevData != null) {
-			let label = [0, 0, 0];
-			label[this.prevActionNumber] += this.prevReward + this.REWARD_GAMMA * result[maxIndex];
-			this.replayDataList.push([this.prevData, label]);
-			
-			// if (this.prevReward != 0)
-				// this.bEndGame = true;
-			if (!this.player.checkLive())
-				this.bEndGame = true;
-		}
-		
-		this.prevData = data;
-		// this.prevReward = this.reward; // 피한 유성 수를 reward로
-		this.reward = 0;
-		this.prevReward = 1; // 살아있는 시간을 reward로
-		
-		// 특정 점수에 도달한걸 보상으로
-		// this.prevReward = 0;
-		// if (!this.player.checkLive())
-		// 	this.prevReward = (this.score >= 5000) ? 10 : -1;
-		
-		this.prevActionNumber = actionNumber;
 	},
 	networkLearning: function () {
-		//TODO: replayDataList 섞기
-		//TODO: 반복 학습
-		console.log("game scroe: " + this.score +  "[" + this.actionEpsilon + "]");
-		
+		console.log("game scroe: " + this.prevReward +  "[" + this.actionEpsilon + "]");
 		
 		//＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊//
 		for (let c = 0; c < this.TRAIN_EPOCH; c++) {
@@ -373,20 +324,39 @@ Scene.prototype = {
 				let data = this.replayDataList[i][0].slice(), label = this.replayDataList[i][1].slice();
 				
 				data = this.network.forward(data);
-				for (let j = 0; j < data.length; j++)
-					if (label[j] == 0) label[j] += data[j];
+				// for (let j = 0; j < data.length; j++)
+				// 	if (label[j] == 0) label[j] += data[j];
+				// console.log(label);
 				
 				data = this.network.errorLayer.diff(data, label);
 				this.network.backward(data);
 			}
-			console.log("epoch: " + ++this.epochCount); // TEST
+			// console.log("epoch: " + ++this.epochCount); // TEST
 		}
+		this.replayDataList = [];
+	},
+	
+	createStar: function () {
+		// let x = 0, c = 0;
+		let x = Math.random() * this.gameSize.width * 4, c = 0;
+		let angle = -(Math.PI/2 - Math.atan2(this.gameSize.height, x));
+		
+		x += this.targetX;
+		c = Math.floor(x / this.gameSize.width);
+		x = x - this.gameSize.width * c;
+		if (c % 2 == 1)
+			x = this.gameSize.width - x;
+		angle *= Math.pow(-1, c);
+		console.log("star: " + x + " " + angle);
+				
+		return new Star(x, angle);
 	},
 	
 	keyDown: function (e) {
 		switch (e.keyCode) {
 			case 90: this.bNetworkAction = !this.bNetworkAction; console.log("networkAction: " + this.bNetworkAction); break; // z
 			case 88: this.bRandomAction = !this.bRandomAction; console.log("randomAction: " + this.bRandomAction); break; // x
+			case 32: this.gamePause = !this.gamePause; console.log("Pressed Pause Button"); break;
 		}
 		this.player.keyDown(e);
 	},

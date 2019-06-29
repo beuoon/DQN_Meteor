@@ -99,7 +99,7 @@
             }
         %>
 		
-		<canvas id="mainCanvas" width="400px" height="400px"></canvas><br>
+		<canvas id="mainCanvas"></canvas><br>
         <br>
 		
         <script src="DQN/ErrorLayer_MSE.js"></script>
@@ -109,10 +109,11 @@
         <script src="DQN/Layer_Flatten.js"></script>
         <script src="DQN/Layer_Convolution.js"></script>
         <script src="DQN/Network.js"></script>
+        <script src="DQN/DQN.js"></script>
         
 		<script src="util.js"></script>
 		<script src="Player.js"></script>
-		<script src="Stars.js"></script>
+		<script src="Star.js"></script>
 		<script src="main.js"></script>
 	</body>
 </html>

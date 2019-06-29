@@ -21,9 +21,21 @@ let Layer_Linear = function (inLayerSize, outLayerSize, optimizer = "MOMENTUM") 
 }
     
 Layer_Linear.prototype = {
+	clone: function () {
+		let layer = new Layer_Linear(this.inLayerSize, this.outLayerSize, this.optimizer);
+		
+		// Copy Weight, Weight Momentum
+		for (let i = 0; i < this.outLayerSize; i++) {
+			layer.weight[i] = this.weight[i].slice();
+			layer.weightMomentum[i] = this.weightMomentum[i].slice();
+		}
+		
+		return layer;
+	},
+	
     forward: function (data) {
 		let output = [];
-		this.input = data;
+		this.input = data.slice();
 		
 		for (let i = 0; i < this.outLayerSize; i++) {
 			output[i] = 0;

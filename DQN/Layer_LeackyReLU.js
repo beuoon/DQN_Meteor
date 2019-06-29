@@ -3,9 +3,13 @@ let Layer_LeackyReLU = function () {
 }
 
 Layer_LeackyReLU.prototype = {
+	clone: function () {
+		return new Layer_LeackyReLU();
+	},
+	
     forward: function (data) {
 		let output = [];
-		this.input = data;
+		this.input = data.slice();
 		
 		for (let i = 0; i < this.input.length; i++)
 			output[i] = Math.max(this.input[i], 0.01 * this.input[i]);

@@ -1,7 +1,8 @@
 
-var Player = function () {
+var Player = function (gameSize) {
 	// 캐릭터 (부위) 크기 및 위치
-	this.drawWidth = 21, this.drawHeight = this.drawWidth/3 * 5;
+	this.drawWidth = 9, this.drawHeight = this.drawWidth/3 * 5;
+	// this.drawWidth = 21, this.drawHeight = this.drawWidth/3 * 5;
 	this.armPos = -this.drawWidth/7 / 3;
 	this.armLen = this.drawWidth/5*2 / 2; // 상박 = 하박
 	this.faceSize = this.drawWidth/5;
@@ -14,7 +15,7 @@ var Player = function () {
 	this.live = true;
 	
 	// 좌표, 각도
-	this.pos = {x: 200, y: 400 - this.size.height/2};
+	this.pos = {x: gameSize.width/2, y: gameSize.height - this.size.height/2};
 	this.angle = 0;
 	
 	// 애니메이션 관절 각도	
@@ -35,10 +36,11 @@ var Player = function () {
 	
 	
 	// 이동
-	this.speed = 250;
+	this.speed = 100;
+	// this.speed = 250;
 	
 	this.lastMoveDir = 0;
-	this.moveLimit = {left: this.size.width/2, right: 400 - this.size.width/2};
+	this.moveLimit = {left: this.size.width/2, right: gameSize.width - this.size.width/2};
 	this.moveStatus = null;
 	
 	this.keyStatus = {left: false, right: false};
@@ -62,11 +64,9 @@ Player.prototype = {
 		if (playerRect.left > starRect.right || playerRect.right < starRect.left ||
 			playerRect.top < starRect.bottom || playerRect.bottom > starRect.top)
 			return false;
-			
-		
+
 		star.destroy();
-		
-		
+
 		if (!this.live) return false;
 		this.live = false;
 		

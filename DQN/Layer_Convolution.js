@@ -37,6 +37,31 @@ let Layer_Convolution = function (filterInfo, stride=1, paddingSize=0) {
 }
 
 Layer_Convolution.prototype = {
+	clone: function () {
+		let layer = new Layer_Convolution(this.filterInfo, this.stride, this.paddingSize);
+		
+		// Copy Weight
+		layer.weightList = [];
+		for (let c = 0; c < this.filterInfo.num; c++) {
+			let weight = [];
+			
+			for (let z = 0; z < this.filterInfo.depth; z++) {
+				weight[z] = [];
+				for (let y = 0; y < this.filterInfo.height; y++) {
+					weight[z][y] = [];
+					for (let x = 0; x < this.filterInfo.width; x++)
+						weight[z][y][x] = this.weight[z][y][x];
+				}
+			}
+			
+			layer.weightList.push(weight);
+		}
+		
+		// Copy Bias
+		layer.biasList = this.biasList.slice();
+		
+		return layer;
+	},
 	calcSize: function (inputSize) {
         this.IW = inputSize.width;
 		this.IH = inputSize.height;

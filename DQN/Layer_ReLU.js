@@ -3,6 +3,10 @@ let Layer_ReLU = function () {
 }
 
 Layer_ReLU.prototype = {
+	clone: function () {
+		return new Layer_ReLU();
+	},
+	
     forward: function (data) {
 		let output = [];
 		this.input = data;

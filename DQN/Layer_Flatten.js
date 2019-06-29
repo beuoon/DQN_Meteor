@@ -1,7 +1,12 @@
-let Layer_Flatten = function () {
-    this.inputInfo;
+let Layer_Flatten = function (inputInfo) {
+    this.inputInfo = inputInfo;
+	this.outputSize = inputInfo.width * inputInfo.height * inputInfo.depth;
 }
 Layer_Flatten.prototype = {
+	clone: function () {
+		return new Layer_Flatten(this.inputInfo);
+	},
+	
     forward: function (data) {
         this.inputInfo = {width: data[0][0].length, height: data[0].length, depth: data.length};
         let output = [];
