@@ -67,7 +67,7 @@ Layer_Linear.prototype = {
 		for (let i = 0; i < this.outLayerSize; i++) {
 			for (let j = 0; j < this.inLayerSize; j++)
 				this.weight[i][j] += -this.ETA * (delta[i] * this.input[j]);
-			this.weight[i][this.inLayerSize] = -this.ETA * delta[i];
+			this.weight[i][this.inLayerSize] += -this.ETA * delta[i];
 		}
     },
     train_Momentum: function (delta) {

@@ -1,4 +1,19 @@
+/*
+DQN을 접목할 수 있는 모델: 
+예측 가능한 시나리오
+→ 같은 state에서 동일한 action을 할 때 무조건 같은 reward와 next state가 나와야 한다.
+→ reward가 다른 state는 구분 가능해야한다.?
+*/
 
+/*
+변경되는 점:
+- DQN을 별도의 객체로 분리
+- Target Network 추가
+- Sample Canvas 삭제: 효용성이 없는 것 같아서 삭제
+- 사용자 조작 기능 삭제
+- Star가 이전 게임의 플레이어 마지막 위치를 향하도록 생성
+- 플레이어가 죽을 때까지 플레이하는게 아니라 하나의 Star만 피하는 걸로 게임을 변경
+*/
 var Scene = function (canvasId) {
 	this.fpsVal = 60;
 	this.gameSize = {width: 50, height: 50};
@@ -10,40 +25,16 @@ var Scene = function (canvasId) {
 	this.canvas.height = this.gameSize.height;
 	this.context = this.canvas.getContext('2d');
 	
-	// DQN Sample
-	this.bSampleCanvas = true;
-    this.sampleCanvasList = [];
-	this.sampleSizeList = [];
-	this.SAMPLE_SCALE_RATE = 5;
-	
 	// DQN
-	this.TRAIN_EPOCH = 50; // 한번 train 할 때 시행할 epoch 값
+	this.TRAIN_EPOCH = 5; // 한번 train 할 때 시행할 epoch 값
 	this.SKIPPING_FRAME = 4; // 수집하는 프레임 간격
 	
 	// Init
 	this.init();
 	this.initNetwork();
 }
-/*
-DQN을 접목할 수 있는 모델: 
-예측 가능한 시나리오
-→ 같은 state에서 동일한 action을 할 때 무조건 같은 reward와 next state가 나와야 한다.
-→ reward가 다른 state는 구분 가능해야한다.
-*/
-/*
-DQN 클래스 모델:
-state: {image, image, image, ...}
-data: {state, action, reward, nextState}
-
-image → DQN → action
-         ↑
-	   reward
-
-*/
 Scene.prototype = {
 	init: function () {
-		this.predictList = null; // DQN의 각 Layer에서 forward된 값들
-		
 		// 오브젝트
 		this.player = new Player(this.gameSize);
 		
@@ -69,68 +60,17 @@ Scene.prototype = {
 		this.fpsCount = 0;
 		this.fpsReal = 0;
 		this.frameStartTime = clock();
+		this.frameCount = 0;
 	},
 	start: function () {
 		this.frame();
 	},
 	
 	initNetwork: function () {
-		let layer, sampleSize;
-		
-		this.network = new DQN(); // [망구조] http://incredible.ai/artificial-intelligence/2017/06/03/Deep-Reinforcement-Learning/
-		
-		sampleSize = this.CROPPING_SIZE;
-		this.sampleSizeList.push(sampleSize);
-		
-		layer = new Layer_Convolution({width: 4, height: 4, depth: 4, num: 6}, 4, 1);
-		sampleSize = layer.calcSize(sampleSize);
-		this.sampleSizeList.push(sampleSize);
-		this.network.addLayer(layer);
-		
-		layer = new Layer_Convolution({width: 3, height: 3, depth: 6, num: 8}, 3, 1);
-		sampleSize = layer.calcSize(sampleSize);
-		this.sampleSizeList.push(sampleSize);
-		this.network.addLayer(layer);
-		
-		sampleSize = sampleSize.width * sampleSize.height * sampleSize.depth;
-		
-		this.network.addLayer(new Layer_Flatten());
-		this.network.addLayer(new Layer_Linear(sampleSize, 250));
-		
-		this.network.addLayer(new Layer_LeackyReLU());
-		this.network.addLayer(new Layer_Linear(250, 100));
-		
-		this.network.addLayer(new Layer_LeackyReLU());
-		this.network.addLayer(new Layer_Linear(100, 50));
-		
-		this.network.addLayer(new Layer_LeackyReLU());
-		this.network.addLayer(new Layer_Linear(50, 3));
-		this.network.setActionNum(3);
-		
-		
-		// 학습
+		this.network = new DQN();
+		this.image = null;
 		this.bNetworkAction = true; // 네트워크 액션
-		
-		// create sample canvas
-		if (this.bSampleCanvas) {
-			let padding = "   ";
-			for (let i = 0; i < this.sampleSizeList.length; i++) {
-				let sampleCanvas = [];
-				let size = this.sampleSizeList[i];
-
-				for (let j = 0; j < size.depth; j++) {
-					let canvas = document.createElement('canvas');
-
-					canvas.width = size.width * this.SAMPLE_SCALE_RATE;
-					canvas.height = size.height * this.SAMPLE_SCALE_RATE;
-					document.body.append(canvas);
-					document.body.append(padding);
-					sampleCanvas.push(canvas);
-				}
-				document.body.append(document.createElement("br"));
-				this.sampleCanvasList.push(sampleCanvas);
-			}
-		}
+		this.epochCount = 0;
 	},
 	
 	frame: function () {
@@ -144,14 +84,20 @@ Scene.prototype = {
 		//＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊//
 		// Frame Content
 		if (!this.gamePause) {
-			this.update(frameInterval);
-			this.draw();
-
-			if (!this.bEndGame)
-				this.networkUpdate();
+			if (!this.bEndGame) {
+				this.update(frameInterval);
+				this.draw();
+			}
 			else {
-				this.networkLearning();
-				this.init();
+				if (this.epochCount == 0)
+					this.network.reset();
+				
+				if (this.epochCount++ < this.TRAIN_EPOCH)
+					this.network.train();
+				else {
+					this.init();
+					this.epochCount = 0;
+				}
 			}
 		}
 		
@@ -171,9 +117,26 @@ Scene.prototype = {
 		setTimeout(function () { self.frame.call(self) }, delayTime);
 		// setTimeout(function () { self.frame.call(self) }, 0); // Non-Sync
 	},
-	update: function (frameInterval) {        
+	update: function (frameInterval) {
+		if (this.bEndGame) return ;
+		
+		// DQN
+		if (this.image != null) {
+			let actionNumber = this.network.update(this.image);
+			this.image = null;
+			
+			// 선택한 actionNumber에 따라 행동
+			switch (actionNumber) {
+				case 0: this.player.setMoveState("LEFT");  break;
+				case 1: this.player.setMoveState("STOP");  break;
+				case 2: this.player.setMoveState("RIGHT"); break;
+			}
+		}
+		
+		// 플레이어
 		this.player.update(frameInterval);
 		
+		// 스테이지
 		if (this.player.checkLive()) {
 			// 점수 상승
 			this.score += 100 * frameInterval;
@@ -183,7 +146,7 @@ Scene.prototype = {
 			// 	this.starNum++;
 			// 	for (let i = this.stars.length; i < this.starNum; i++)
 			// 		this.stars.push(this.createStar());
-				
+			
 			// 	this.prevStageScore = this.score;
 			// }
 		}
@@ -204,13 +167,19 @@ Scene.prototype = {
 			if (star.checkCollision()) {
 				this.wavePower += 5.0; // 진동 세기 증가
 				this.targetX = this.player.pos.x; // 다음번 유성의 목적지
-				this.reward = 1;
 				this.stars.splice(i, 1);
 				
-				// if (this.player.live)
-				// 	this.stars[i] = this.createStar(); // 플레이어 살아있으면 유성 계속 생성
-				// else
-				// 	this.stars.splice(i, 1); // 플레이어 죽으면 유성 생성 중단
+				let reward = 0;
+				if (this.player.live) {
+					reward = 1;
+					this.stars[i] = this.createStar(); // 플레이어 살아있으면 유성 계속 생성
+				}
+				else {
+					reward = -1;
+					this.stars.splice(i, 1); // 유성 삭제
+					this.bEndGame = true;
+				}
+				this.network.setReward(reward);
 			}
 		}
 		
@@ -260,16 +229,9 @@ Scene.prototype = {
 		
 		// Extract Data
 		if (++this.frameCount % this.SKIPPING_FRAME == 0) {
-			let grayData = processImageData(context, this.CROPPING_SIZE.width, this.CROPPING_SIZE.height);
-			this.dataList.push(grayData);
+			let grayData = processImageData(context, this.network.IMAGE_SIZE.width, this.network.IMAGE_SIZE.height);
+			this.image = encodeData(grayData);
 			this.frameCount = 0;
-		}
-		
-		// Draw Sample Image
-		if (!this.bSampleCanvas || this.predictList == null) return;
-		for (let i = 0; i < this.sampleCanvasList.length; i++) {
-			for (let j = 0; j < this.sampleCanvasList[i].length; j++)
-				drawImageData_Upsize(this.sampleCanvasList[i][j].getContext('2d'), decodeData(this.predictList[i][j]));
 		}
 	},
 	drawFPS: function (context) {
@@ -283,61 +245,9 @@ Scene.prototype = {
 		context.stroke();
 	},
 	
-	networkUpdate: function () {
-		if (this.bEndGame) return ;
-		
-		
-		if (this.bNetworkAction) {
-			// 선택한 actionNumber에 따라 행동
-			switch (actionNumber) {
-				case 0: this.player.setMoveState("LEFT");  break;
-				case 1: this.player.setMoveState("STOP");  break;
-				case 2: this.player.setMoveState("RIGHT"); break;
-			}
-		}
-		else {
-			// 플레이어 행동을 기록
-			switch (this.player.lastMoveDir) {
-				case -1: actionNumber = 0; break;
-				case 0: actionNumber = 1; break;
-				case 1: actionNumber = 2; break;
-			}
-		}
-	},
-	networkLearning: function () {
-		console.log("game scroe: " + this.prevReward +  "[" + this.actionEpsilon + "]");
-		
-		//＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊＊//
-		for (let c = 0; c < this.TRAIN_EPOCH; c++) {
-			// 자료 순서 섞기
-			for (let i = 0; i < this.replayDataList.length/2; i++) {
-				let p = Math.round(Math.random() * (this.replayDataList.length - 1));
-				let q = Math.round(Math.random() * (this.replayDataList.length - 1));
-
-				let temp = this.replayDataList[p];
-				this.replayDataList[p] = this.replayDataList[q];
-				this.replayDataList[q] = temp;
-			}
-			
-			// 학습
-			for (let i = 0; i < this.replayDataList.length; i++) {
-				let data = this.replayDataList[i][0].slice(), label = this.replayDataList[i][1].slice();
-				
-				data = this.network.forward(data);
-				// for (let j = 0; j < data.length; j++)
-				// 	if (label[j] == 0) label[j] += data[j];
-				// console.log(label);
-				
-				data = this.network.errorLayer.diff(data, label);
-				this.network.backward(data);
-			}
-			// console.log("epoch: " + ++this.epochCount); // TEST
-		}
-		this.replayDataList = [];
-	},
-	
 	createStar: function () {
 		// let x = 0, c = 0;
+		/*
 		let x = Math.random() * this.gameSize.width * 4, c = 0;
 		let angle = -(Math.PI/2 - Math.atan2(this.gameSize.height, x));
 		
@@ -347,15 +257,16 @@ Scene.prototype = {
 		if (c % 2 == 1)
 			x = this.gameSize.width - x;
 		angle *= Math.pow(-1, c);
-		console.log("star: " + x + " " + angle);
+		console.log("star: " + x + " " + (angle * 180/Math.PI));
+		*/
+		let x = this.targetX, angle = 0;
 				
 		return new Star(x, angle);
 	},
 	
 	keyDown: function (e) {
 		switch (e.keyCode) {
-			case 90: this.bNetworkAction = !this.bNetworkAction; console.log("networkAction: " + this.bNetworkAction); break; // z
-			case 88: this.bRandomAction = !this.bRandomAction; console.log("randomAction: " + this.bRandomAction); break; // x
+			case 88: this.network.turnRandomAction(!this.network.bRandomAction); console.log("randomAction: " + this.network.bRandomAction); break; // x
 			case 32: this.gamePause = !this.gamePause; console.log("Pressed Pause Button"); break;
 		}
 		this.player.keyDown(e);

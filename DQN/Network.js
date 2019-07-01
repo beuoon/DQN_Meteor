@@ -7,8 +7,8 @@ Network.prototype = {
     },
 	clone: function () {
 		let network = new Network();
-		for (let i = 0; i < this.layer.length; i++)
-			network.addLayer(this.layer[i].clone());
+		for (let i = 0; i < this.layers.length; i++)
+			network.addLayer(this.layers[i].clone());
 		return network;
 	},
 	

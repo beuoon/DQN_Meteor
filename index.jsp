@@ -74,6 +74,7 @@
 		<link rel="stylesheet" type="text/css" href="main.css">
 	</head>
 	<body>
+<%--
         결과1 : 
         <%
             for (int i = 0; i < predictData1.size(); i++) {
@@ -98,6 +99,7 @@
                 } 
             }
         %>
+--%>
 		
 		<canvas id="mainCanvas"></canvas><br>
         <br>
