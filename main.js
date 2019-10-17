@@ -7,12 +7,7 @@ DQN을 접목할 수 있는 모델:
 
 /*
 변경되는 점:
-- DQN을 별도의 객체로 분리
-- Target Network 추가
-- Sample Canvas 삭제: 효용성이 없는 것 같아서 삭제
-- 사용자 조작 기능 삭제
-- Star가 이전 게임의 플레이어 마지막 위치를 향하도록 생성
-- 플레이어가 죽을 때까지 플레이하는게 아니라 하나의 Star만 피하는 걸로 게임을 변경
+- 움직이면 -0.2 reward 부여
 */
 var Scene = function (canvasId) {
 	this.fpsVal = 60;
@@ -40,6 +35,7 @@ Scene.prototype = {
 		
 		this.stars = [];
 		this.starNum = 1; // 원래는 10
+		this.bTraceStar = true;
 		
 		for (let i = 0; i < this.starNum; i++)
 			this.stars.push(this.createStar());
@@ -121,8 +117,9 @@ Scene.prototype = {
 		if (this.bEndGame) return ;
 		
 		// DQN
+		let actionNumber = 1;
 		if (this.image != null) {
-			let actionNumber = this.network.update(this.image);
+			actionNumber = this.network.update(this.image);
 			this.image = null;
 			
 			// 선택한 actionNumber에 따라 행동
@@ -167,12 +164,15 @@ Scene.prototype = {
 			if (star.checkCollision()) {
 				this.wavePower += 5.0; // 진동 세기 증가
 				this.targetX = this.player.pos.x; // 다음번 유성의 목적지
-				this.stars.splice(i, 1);
 				
-				let reward = 0;
+				let reward = (actionNumber == 1) ? 0 : -0.2;
 				if (this.player.live) {
 					reward = 1;
-					this.stars[i] = this.createStar(); // 플레이어 살아있으면 유성 계속 생성
+					if (this.bTraceStar)
+						this.stars[i] = this.createStar(true); // 플레이어 살아있으면 유성 계속 생성
+					else
+						this.stars[i] = this.createStar();
+					this.bTraceStar = !this.bTraceStar;
 				}
 				else {
 					reward = -1;
@@ -245,7 +245,7 @@ Scene.prototype = {
 		context.stroke();
 	},
 	
-	createStar: function () {
+	createStar: function (bTrace = false) {
 		// let x = 0, c = 0;
 		/*
 		let x = Math.random() * this.gameSize.width * 4, c = 0;
@@ -259,7 +259,9 @@ Scene.prototype = {
 		angle *= Math.pow(-1, c);
 		console.log("star: " + x + " " + (angle * 180/Math.PI));
 		*/
-		let x = this.targetX, angle = 0;
+		let x = Math.random() * this.gameSize.width, angle = 0;
+		if (bTrace)
+			x = this.targetX;
 				
 		return new Star(x, angle);
 	},
