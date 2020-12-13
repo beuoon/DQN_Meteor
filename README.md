@@ -35,7 +35,7 @@
  - 다른 종류의 게임을 학습해보자.  
  - 다중 초점 주의 DQN을 만들어보자.  
    
-실행 방법: Tomcat을 설치하고 webapps에 해당 Repository를 clone한다.  
+실행 방법: 브라우저로 index.html 파일을 연다.
 
 실행화면  
 ![DQN_Meteor](https://user-images.githubusercontent.com/28178437/102003171-2ead1700-3d47-11eb-9444-ff39816914c3.gif)
