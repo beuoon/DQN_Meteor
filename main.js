@@ -2,8 +2,6 @@
 var Scene = function (canvasId) {
 	this.canvas = document.getElementById(canvasId);
 	this.context = this.canvas.getContext('2d');
-    this.scaleCanvas = document.getElementById('scaleCanvas');
-    this.scaleContext = this.scaleCanvas.getContext('2d');
 	
 	this.fpsVal = 60;
 	
@@ -11,7 +9,6 @@ var Scene = function (canvasId) {
 	this.TRAIN_EPOCH = 10;
 	
 	this.init();
-	this.initNetwork();
 }
 Scene.prototype = {
 	init: function () {
@@ -51,21 +48,6 @@ Scene.prototype = {
 		this.frame();
 	},
 	
-	initNetwork: function () {
-        this.network = new Network(); // [망구조] http://incredible.ai/artificial-intelligence/2017/06/03/Deep-Reinforcement-Learning/
-        this.network.addLayer(new Layer_Convolution({width: 8, height: 8, depth: 4, num: 8}, 4, 1));
-        this.network.addLayer(new Layer_Convolution({width: 4, height: 4, depth: 8, num: 16}, 2));
-        this.network.addLayer(new Layer_Convolution({width: 3, height: 3, depth: 16, num: 8}, 1));
-        this.network.addLayer(new Layer_Flatten());
-        this.network.addLayer(new Layer_Linear(72, 50));
-        this.network.addLayer(new Layer_ReLU());
-        this.network.addLayer(new Layer_Linear(50, 3));
-		
-		this.network.setErrorLayer(new ErrorLayer_MSE());
-		
-		this.replayDataList = [];
-	},
-	
 	frame: function () {
 		var currentTime = clock();
 		// let frameInterval = (currentTime - this.frameStartTime) / 1000;
@@ -78,10 +60,8 @@ Scene.prototype = {
 		// Frame Content
 		this.update(frameInterval);
 		this.draw();
-		this.networkUpdate();
 		
 		if (!this.player.checkLive()) {
-			this.networkLearning();
 			this.init();
 		}
 		
@@ -177,10 +157,6 @@ Scene.prototype = {
 			this.particleObjects[i].draw(context);
 		
 		context.restore();
-        
-        let grayData = processImageData(context, this.scaleCanvas.width, this.scaleCanvas.height);
-        this.dataList.push(grayData);
-        drawImageData(this.scaleContext, grayData);
 	},
 	drawFPS: function (context) {
 		context.beginPath();
@@ -191,59 +167,6 @@ Scene.prototype = {
 		context.beginPath();
 		context.fillText("score : " + Math.floor(this.score), context.canvas.width - 70, 10);
 		context.stroke();
-	},
-	
-	networkUpdate: function () {
-		if (!this.player.checkLive()) return ;
-		if (this.dataList.length < 4) return ;
-		
-		let data = [];
-		for (let i = 0; i < 4; i++) {
-			data[i] = this.dataList.shift();
-			data[i] = processData(data[i]);
-		}
-
-		let result = this.network.predict(data);
-		result = result[0]; // result: Q(s, a)
-
-		let maxIndex = 0;
-		for (let i = 1; i < result.length; i++) {
-			if (result[i] > result[maxIndex])
-				maxIndex = i;
-		}
-		
-		switch (maxIndex) {
-			case 0: this.player.setMoveState("LEFT");  break;
-			case 1: this.player.setMoveState("STOP");  break;
-			case 2: this.player.setMoveState("RIGHT"); break;
-		}
-			
-		// input(prevData), label(prevAction, prev reward, max reward of curr Data)
-		if (this.prevData != null) {
-			let label = [0, 0, 0];
-			label[this.prevMaxIndex] += this.prevReward + this.REWARD_GAMMA * result[maxIndex];
-			this.replayDataList.push([this.prevData, label]);
-		}
-			
-		this.prevData = data;
-		this.prevReward = this.score;
-		this.prevMaxIndex = maxIndex;
-	},
-	networkLearning: function () {
-		//TODO: replayDataList 섞기
-		//TODO: 반복 학습
-		for (let c = 0; c < this.TRAIN_EPOCH; c++) {
-			for (let i = 0; i < this.replayDataList.length; i++) {
-				console.log(i);
-				let data = this.replayDataList[i][0], label = this.replayDataList[i][1];
-				
-				data = this.network.forward(data);
-				for (let j = 0; j < 3; j++)
-					data[0][j] += label[j];
-				data = this.network.errorLayer.diff(data, [label]);
-				this.network.backward(data);
-			}
-		}
 	},
 	
 	keyDown: function (e) {
